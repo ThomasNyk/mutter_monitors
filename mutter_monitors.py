@@ -37,11 +37,28 @@ def get_monitor_conf(monitors, args, connectors):
         updated_connected_monitors.append(this_mon_conf) 
     return updated_connected_monitors
 
+
+def print_usage():
+        print(f'Usage: ./{__file__.split("/")[-1]} 2 0 5 2.0')
+        print('this initiate the following changes:')
+        print('monitor index 0 will assume its  mode 2,')
+        print('monitor index 1 will assume its  mode 0,')
+        print('monitor index 2 will assume its  mode 5.')
+        print('all monitors would have 200% scaling.')
+        print()
+
+
 if __name__ == '__main__':
     print()
 
     # get user input
-    args = [int(i) for i in sys.argv[1:]]
+    args = [int(i) for i in sys.argv[1:-1]]
+    scale = dbus.Double(sys.argv[-1])
+    if scale not in [dbus.Double(1.0), dbus.Double(2.0)]:
+        print('last argument is for scale, expected either 1.0 or 2.0')
+        print_usage()
+        exit()
+
 
     # set up the environment
     namespace = "org.gnome.Mutter.DisplayConfig"
@@ -58,17 +75,10 @@ if __name__ == '__main__':
     connectors = [i[0][0] for i in connected_monitors]
 
     # if the user doesn't pass any args, just print their possibile configs and quit.
-    if len(args) == 0:
+    if len(args) < 2:
         monitor_modes = get_monitor_modes(connectors)
-        print()
-        print(f'Usage: ./{__file__.split("/")[-1]} 2 0 5')
-        print('this initiate the following changes:')
-        print('monitor index 0 will assume its  mode 2,')
-        print('monitor index 1 will assume its  mode 0,')
-        print('monitor index 2 will assume its  mode 5.')
-        print()
+        print_usage()
         exit()
-
 
     # we have args. parse the monitor configs.
     monitors = get_monitor_dict(connectors, connected_monitors)
@@ -83,10 +93,7 @@ if __name__ == '__main__':
 
     monitor_config = dbus.Array({})
     for index, logical_monitor in enumerate(logical_monitors):
-        x, y, scale, transform, primary, monitors, props = logical_monitor
-
-        # manually override the scale here
-        scale = dbus.Double(1.0)
+        x, y, _scale, transform, primary, monitors, props = logical_monitor
 
         # if this is set, the config will be written to disk.
         persistent = dbus.UInt32(1)
