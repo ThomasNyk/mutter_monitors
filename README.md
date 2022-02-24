@@ -79,7 +79,7 @@ This should retain whatever layout you had previously (extend/mirror/single).
 
 
 
-# Automation on Plug/Unplug
+# Automation on un/plug
 
 Use [udev rules](https://wiki.archlinux.org/title/Udev#Execute_when_HDMI_cable_is_plugged_in_or_unplugged).
 
