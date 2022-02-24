@@ -14,10 +14,11 @@ def get_monitor_modes(connectors):
     # that way you can hard code you own display name and mode preferences
     for monitor_index, connector in enumerate(connectors):
         for mode_index, mode in enumerate(connected_monitors[monitor_index][1]):
-            # connector is  a dbus.String
-            # mode[0] is a dbus.Struct
-            print(f'[{monitor_index}] {connector} \t [{mode_index}] {mode[0]}')
-
+            if mode[6].get("is-current", False):
+                print(f'{connector} \t [*] {mode[0]}')
+            else:
+                print(f'{connector} \t [{mode_index}] {mode[0]}')
+        print()
 
 def get_monitor_dict(connectors, connected_monitors):
     mon_dict = {}
@@ -27,37 +28,17 @@ def get_monitor_dict(connectors, connected_monitors):
             mon_dict[monitor_index][connector].append(mode)
     return mon_dict
 
-def get_monitor_conf(monitors, args, connectors):
-    updated_connected_monitors = dbus.Array([])
-    offset = 0
-    for monitor_index, mode_index in enumerate(args):
-        connector = connectors[monitor_index]
-        desired_mode = monitors[monitor_index][dbus.String(connectors[monitor_index])][mode_index][0]
-        this_mon_conf = dbus.Array([connector, desired_mode, dbus.Array({})])
-        updated_connected_monitors.append(this_mon_conf) 
-    return updated_connected_monitors
-
 
 def print_usage():
-        print(f'Usage: ./{__file__.split("/")[-1]} 2 0 5 2.0')
-        print('this initiate the following changes:')
-        print('monitor index 0 will assume its  mode 2,')
-        print('monitor index 1 will assume its  mode 0,')
-        print('monitor index 2 will assume its  mode 5.')
-        print('all monitors would have 200% scaling.')
-        print()
+    print(f'Usage: ./{__file__.split("/")[-1]} DP-1 1 HDMI-A-0 5 2.0')
+    print('this would cause DP-1 to assume mode index 1, HDMI-A-0 to assume mode index 5,')
+    print('all listed monitors would be assigned 200% scaling,')
+    print('any undeclared monitors will retain their mode, but be assigned the new scaling.')
+    print()
 
 
 if __name__ == '__main__':
     print()
-
-    # get user input
-    args = [int(i) for i in sys.argv[1:-1]]
-    scale = dbus.Double(sys.argv[-1])
-    if scale not in [dbus.Double(1.0), dbus.Double(2.0)]:
-        print('last argument is for scale, expected either 1.0 or 2.0')
-        print_usage()
-        exit()
 
 
     # set up the environment
@@ -75,28 +56,93 @@ if __name__ == '__main__':
     connectors = [i[0][0] for i in connected_monitors]
 
     # if the user doesn't pass any args, just print their possibile configs and quit.
-    if len(args) < 2:
+    if len(sys.argv) < 4:
         monitor_modes = get_monitor_modes(connectors)
         print_usage()
         exit()
 
+
+    # test that we have the correct number of arguments, requires odd number
+    args = sys.argv[1:]
+    if len(args) % 2 == 0:
+        # even number of args were passed
+        print_usage()
+        exit()
+
+    # test whether scale arg is valid, always expected to be last argument.
+    scale = dbus.Double(sys.argv[-1])
+    if scale not in [dbus.Double(1.0), dbus.Double(2.0)]:
+        print('last argument is for scale, epected either 1.0 or 2.0')
+        print_usage()
+        exit()
+
+    # monitor mode monitor mode
+    user_monitor_modes = args[0:-1]
+
+    # populate user give monitor mode pairs into a dict.
+    # if a user declares a monitor multiple times in args, the last given value will be used.
+    user_monitor_dict = {}
+    # zip(*[iter(user_monitor_modes)]*2) just iters through by two items at a time
+    for monitor, mode in zip(*[iter(user_monitor_modes)]*2):
+        user_monitor_dict[monitor] = int(mode)
+
+
     # we have args. parse the monitor configs.
     monitors = get_monitor_dict(connectors, connected_monitors)
 
-    # display what profiles we plan on applying to each monitor
-    for monitor_index, mode_index in enumerate(args):
-        print(f'setting {connectors[monitor_index]} to ', end = '')
-        print(f'{monitors[monitor_index][connectors[monitor_index]][mode_index][0]}')
+    # here, we should check that the monitor names are valid
+    # get a list of valid monitor names
+    valid_monitors = []
+    for key, value in monitors.items():
+        for k, v in value.items():
+            valid_monitors.append(str(k))
 
-    # get the dbus properties of the monitors we're updating
-    updated_connected_monitors = get_monitor_conf(monitors, args, connectors)
+    # get a list of invalid monitors
+    invalid_monitors = []
+    for i in user_monitor_dict.keys():
+        if i not in valid_monitors:
+            invalid_monitors.append(i)
+
+    # if there's any invalid monitors, print their names and exit.
+    if invalid_monitors:
+        for i in invalid_monitors:
+            print(f'{i} is not a valid monitor name')
+
+        print(f'valid monitor names are {valid_monitors}')
+        print('exiting without attempting any changes.')
+        exit()
+
+
+    # this could probably be consolidated
+    updated_connected_monitors = dbus.Array([])
+    for monitor_data in connected_monitors:
+        current_mon = monitor_data[0][0]
+        if current_mon not in user_monitor_dict.keys():
+            # Undeclared monitors will try to retain their settings.
+            # get the current mode of the undeclared monitor
+            for mode_ind, mode in enumerate(monitor_data[1]):
+                if mode[6].get("is-current", False):
+                    user_monitor_dict[str(current_mon)] = mode_ind
+
+        current_mon_index = connected_monitors.index(monitor_data)
+        connector = connectors[current_mon_index]
+        prof_index = user_monitor_dict[current_mon]
+        prof_description = monitor_data[1][prof_index][0]
+        this_mon_conf = dbus.Array([connector, prof_description, dbus.Array({})])
+        updated_connected_monitors.append(this_mon_conf)
+        print(f'setting {current_mon} to {prof_description}')
+
 
     monitor_config = dbus.Array({})
-    for index, logical_monitor in enumerate(logical_monitors):
+    for logical_monitor in logical_monitors:
         x, y, _scale, transform, primary, monitors, props = logical_monitor
 
         # if this is set, the config will be written to disk.
         persistent = dbus.UInt32(1)
+
+        # make sure we have the right index for the monitor
+        indices = [i[0] for i in updated_connected_monitors]
+        index = indices.index(monitors[0][0])
 
         # uua(iiduba(ssa{sv}))a{sv}
         config = dbus.Struct(
@@ -113,6 +159,9 @@ if __name__ == '__main__':
         )
 
         monitor_config.append(config)
+
+
+    print(f'monitor_config: {monitor_config}')
 
     ## Set the config :D
     # all args are types
