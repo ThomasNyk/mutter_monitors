@@ -5,7 +5,7 @@ Sets monitor mode, works around some scaling issues that are present with xrandr
 
 `python3 mutter_monitors.py`
 
-The mode with the asterisc is currently selected.
+The mode with the asterisk is currently selected.
 
 ```
 
