@@ -161,7 +161,7 @@ if __name__ == '__main__':
         monitor_config.append(config)
 
 
-    print(f'monitor_config: {monitor_config}')
+    # print(f'monitor_config: {monitor_config}')
 
     ## Set the config :D
     # all args are types
