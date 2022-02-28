@@ -40,7 +40,6 @@ def print_usage():
 if __name__ == '__main__':
     print()
 
-
     # set up the environment
     namespace = "org.gnome.Mutter.DisplayConfig"
     dbus_path = "/org/gnome/Mutter/DisplayConfig"
@@ -122,6 +121,8 @@ if __name__ == '__main__':
             # get the current mode of the undeclared monitor
             for mode_ind, mode in enumerate(monitor_data[1]):
                 if mode[6].get("is-current", False):
+                    # print(current_mon)
+                    # print(type(current_mon))
                     user_monitor_dict[str(current_mon)] = mode_ind
 
         current_mon_index = connected_monitors.index(monitor_data)
