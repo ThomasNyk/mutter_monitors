@@ -50,7 +50,11 @@ if __name__ == '__main__':
     current_state = interface.GetCurrentState()
     serial = current_state[0]
     connected_monitors = current_state[1]
+    # print(connected_monitors)
+    # print()
     logical_monitors = current_state[2]
+    # print(logical_monitors)
+    # print()
 
     connectors = [i[0][0] for i in connected_monitors]
 
@@ -77,6 +81,7 @@ if __name__ == '__main__':
 
     # monitor mode monitor mode
     user_monitor_modes = args[0:-1]
+    user_monitor_modes = [i.upper() for i in user_monitor_modes]
 
     # populate user give monitor mode pairs into a dict.
     # if a user declares a monitor multiple times in args, the last given value will be used.
@@ -121,9 +126,12 @@ if __name__ == '__main__':
             # get the current mode of the undeclared monitor
             for mode_ind, mode in enumerate(monitor_data[1]):
                 if mode[6].get("is-current", False):
-                    # print(current_mon)
-                    # print(type(current_mon))
+                    # this entry doesn't get set if there's no current-mode already. Probably happens for first time connections on new monitors, before they are powered on.
                     user_monitor_dict[str(current_mon)] = mode_ind
+
+        # double check that we have a mode on each monitor, if not, set it to 0. Fixes cases of no current-mode
+        if current_mon not in user_monitor_dict.keys():
+            user_monitor_dict[str(current_mon)] = 0
 
         current_mon_index = connected_monitors.index(monitor_data)
         connector = connectors[current_mon_index]
@@ -132,7 +140,6 @@ if __name__ == '__main__':
         this_mon_conf = dbus.Array([connector, prof_description, dbus.Array({})])
         updated_connected_monitors.append(this_mon_conf)
         print(f'setting {current_mon} to {prof_description}')
-
 
     monitor_config = dbus.Array({})
     for logical_monitor in logical_monitors:
